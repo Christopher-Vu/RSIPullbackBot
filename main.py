@@ -1,3 +1,6 @@
+# testing cursor in this file
+
+from tkinter.constants import E
 import pandas as pd
 import yfinance as yf
 import ta
@@ -5,51 +8,66 @@ from concurrent.futures import ThreadPoolExecutor, as_completed
 
 tickers = pd.read_csv('sp500_companies.csv')['Symbol'].tolist()
 
-def rsi(close, period):
-    period_close = close[-(period + 1):].tolist()
-    AvgU, AvgD = 0, 0
-    for ind in range(period):
-        if period_close[ind] > period_close[ind + 1]: AvgD += (period_close[ind] - period_close[ind + 1])
-        if period_close[ind] < period_close[ind + 1]: AvgU += (period_close[ind + 1] - period_close[ind])
-    RS = AvgU / AvgD
-    return 100 - (100/(1+RS))
+filtered_tickers = [ticker for ticker in tickers]
 
-def rsi_pullback(ticker):
+result = []
+
+def check_conditions(ticker):
     try:
-        data = yf.download(ticker, period='1y', interval="1d")
-        close_200 = pd.Series(data['Close'].to_numpy().flatten())[-200:]
-        rsi_10 = rsi(close_200, 10)
-        print(rsi_10)
-        sma_200 = close_200.mean()
-        print(sma_200)
-        print(close_200.tolist()[-1])
-
-        if rsi_10 < 30 and close_200.tolist()[-1] > sma_200: return ticker
+        df = yf.download(ticker, period="1y", progress=False, auto_adjust=True)
+        if len(df) < 200:
+            return None
+        
+        if isinstance(df.columns, pd.MultiIndex):
+            if ('Close', ticker) not in df.columns:
+                return None
+            close_prices = df[('Close', ticker)]
+        else:
+            if 'Close' not in df.columns:
+                return None
+            close_prices = df['Close']
+        
+        close_prices = close_prices.dropna()
+        
+        if len(close_prices) < 200:
+            return None
+        
+        df['RSI_10'] = ta.momentum.rsi(close_prices, window=10)
+        df['SMA_200'] = ta.trend.sma_indicator(close_prices, window=200)
+        
+        rsi_latest = df['RSI_10'].iloc[-1]
+        sma_latest = df['SMA_200'].iloc[-1]
+        close_latest = close_prices.iloc[-1]
+        # Check for valid values
+        if pd.isna(rsi_latest) or pd.isna(sma_latest) or pd.isna(close_latest):
+            return None
+        
+        print(f"{ticker}: RSI={rsi_latest:.1f}, Close={close_latest:.1f}, SMA200={sma_latest:.1f}")
+        
+        if rsi_latest < 35 and close_latest > (sma_latest * 0.95):
+            return ticker
+        
     except Exception as e:
-        print(f"Error processing {ticker}: {e}")
-        return "err"
-    return "fail"
+        print(f"Error with ticker {ticker}: {e}")
+        return None
 
-# ai slop
-trades = []
-
-"""
-def worker(ticker):
-    if rsi_pullback(ticker):
-        return ticker
+    print(f"No error, no match with ticker {ticker}")
     return None
 
-errors, fails = 0, 0
+test_tickers = filtered_tickers[:20]  
 
-with ThreadPoolExecutor() as executor:
-    futures = [executor.submit(worker, ticker) for ticker in tickers]
+"""
+with ThreadPoolExecutor(max_workers=10) as executor:
+    futures = [executor.submit(check_conditions, ticker) for ticker in test_tickers]
     for future in as_completed(futures):
-        result = future.result()
-        if result == "err": errors += 1
-        if result == "fail": fails += 1
-        else: trades.append(result)
-
-print(trades, errors, fails)
+        res = future.result()
+        if res is not None:
+            result.append(res)
 """
 
-rsi_pullback("GOOG")
+for ticker in tickers:
+    if check_conditions(ticker) is not None:
+        result.append(ticker)
+
+print(f"\nStocks found: {result}")
+print(f"Total matches: {len(result)}")
