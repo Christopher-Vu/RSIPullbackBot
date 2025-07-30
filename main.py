@@ -43,15 +43,17 @@ def check_conditions(ticker):
         
         print(f"{ticker}: RSI={rsi_latest:.1f}, Close={close_latest:.1f}, SMA200={sma_latest:.1f}")
         
-        if rsi_latest < 35 and close_latest > (sma_latest * 0.95):
+        if rsi_latest < 35 and close_latest > sma_latest:
             return ticker
         
     except Exception as e:
         print(f"Error with ticker {ticker}: {e}")
+        global errors
         errors += 1
         return None
 
     print(f"No error, no match with ticker {ticker}")
+    global non_matches
     non_matches += 1
     return None
 
