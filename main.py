@@ -1,5 +1,3 @@
-# testing cursor in this file
-
 from tkinter.constants import E
 import pandas as pd
 import yfinance as yf
@@ -11,6 +9,7 @@ tickers = pd.read_csv('sp500_companies.csv')['Symbol'].tolist()
 filtered_tickers = [ticker for ticker in tickers]
 
 result = []
+non_matches, errors = 0, 0
 
 def check_conditions(ticker):
     try:
@@ -49,9 +48,11 @@ def check_conditions(ticker):
         
     except Exception as e:
         print(f"Error with ticker {ticker}: {e}")
+        errors += 1
         return None
 
     print(f"No error, no match with ticker {ticker}")
+    non_matches += 1
     return None
 
 test_tickers = filtered_tickers[:20]  
@@ -70,4 +71,4 @@ for ticker in tickers:
         result.append(ticker)
 
 print(f"\nStocks found: {result}")
-print(f"Total matches: {len(result)}")
+print(f"Matches: {len(result)}, Non Matches: {str(non_matches)}, Errors: {str(errors)}")
